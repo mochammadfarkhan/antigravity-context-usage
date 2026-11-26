@@ -21,6 +21,16 @@
         turnsEst
           ? `${left} free (~${turnsEst} turns left) · ${cachePct}% cached`
           : `${left} free · ${cachePct}% cached`,
+      bdToggleClosed: '▸ Breakdown',
+      bdToggleOpen: '▾ Breakdown',
+      bdMessages: 'Messages',
+      bdSystem: 'System & tools',
+      bdTools: 'Tool outputs',
+      bdThinking: 'Thinking',
+      bdFree: 'Free space',
+      invMcp: 'MCP tools',
+      invSkills: 'Skills',
+      invMemory: 'Memory files',
       alertHigh: 'Context is getting heavy — consider /compact or a new chat soon.',
       alertCritical: 'Near limit — auto-compaction soon. Start a new chat for best quality.',
       foot: (lastIn, lastCache, cumTotal, costStr, updated) =>
@@ -76,6 +86,16 @@
         turnsEst
           ? `Sisa ${left} (±${turnsEst} turn lagi) · ${cachePct}% cache`
           : `Sisa ${left} · ${cachePct}% cache`,
+      bdToggleClosed: '▸ Rincian',
+      bdToggleOpen: '▾ Rincian',
+      bdMessages: 'Pesan chat',
+      bdSystem: 'Sistem & tool',
+      bdTools: 'Output tool',
+      bdThinking: 'Thinking',
+      bdFree: 'Ruang kosong',
+      invMcp: 'MCP tools',
+      invSkills: 'Skills',
+      invMemory: 'File memori',
       alertHigh: 'Context mulai berat — pertimbangkan /compact atau chat baru.',
       alertCritical: 'Hampir penuh — compaction segera terjadi. Buka chat baru agar tetap tajam.',
       foot: (lastIn, lastCache, cumTotal, costStr, updated) =>
@@ -122,6 +142,7 @@
     refreshMs: 5000,
     session: 'auto',
     paused: false,
+    showBreakdown: false,
     lastData: null,
     timer: null,
     savedTimer: null,
@@ -153,8 +174,15 @@
     cwPct: $('cw-pct'),
     cwStatusBadge: $('cw-status-badge'),
     cwTokensPair: $('cw-tokens-pair'),
-    cwBar: $('cw-bar'),
+    segMsg: $('seg-msg'),
+    segSys: $('seg-sys'),
+    segTool: $('seg-tool'),
+    segThink: $('seg-think'),
     cwSummary: $('cw-summary'),
+    btnBreakdown: $('btn-breakdown'),
+    cwBreakdownPanel: $('cw-breakdown-panel'),
+    cwBreakdownRows: $('cw-breakdown-rows'),
+    cwInventoryRows: $('cw-inventory-rows'),
     cwAlert: $('cw-alert'),
     cwModelLine: $('cw-model-line'),
     sparkTooltip: $('spark-tooltip'),
@@ -270,6 +298,7 @@
 
     els.cwHeading.textContent = dict.contextTitle;
     els.cwEmpty.textContent = dict.cwEmpty;
+    els.btnBreakdown.textContent = state.showBreakdown ? dict.bdToggleOpen : dict.bdToggleClosed;
     els.luHeading.textContent = dict.usageTitle;
     els.lblKpiFresh.textContent = dict.kpiFresh;
     els.lblKpiOut.textContent = dict.kpiOut;
@@ -430,30 +459,93 @@
 
     els.cwPct.textContent = `${pct.toFixed(1)}%`;
     els.cwTokensPair.textContent = `${fmtCompact(cw.contextTokens)} / ${fmtCompact(state.limit)}`;
-    els.cwBar.style.width = `${clampedPct.toFixed(1)}%`;
-    els.cwBar.classList.remove('warn', 'danger');
+
+    const bd = cw.breakdown || {
+      system: Math.min(cw.contextTokens, 15000),
+      messages: Math.max(0, Math.round((cw.contextTokens - 15000) * 0.35)),
+      tools: Math.max(0, Math.round((cw.contextTokens - 15000) * 0.45)),
+      thinking: Math.max(0, Math.round((cw.contextTokens - 15000) * 0.2)),
+    };
+
+    const pctOf = (v) => Math.max(0, Math.min(100, (v / state.limit) * 100));
+    els.segMsg.style.width = `${pctOf(bd.messages).toFixed(2)}%`;
+    els.segSys.style.width = `${pctOf(bd.system).toFixed(2)}%`;
+    els.segTool.style.width = `${pctOf(bd.tools).toFixed(2)}%`;
+    els.segThink.style.width = `${pctOf(bd.thinking).toFixed(2)}%`;
+
     els.cwStatusBadge.className = 'badge';
     els.cwAlert.className = 'alert-chip hidden';
 
     if (pct >= 90) {
-      els.cwBar.classList.add('danger');
       els.cwStatusBadge.classList.add('badge-red');
       els.cwStatusBadge.textContent = dict.statusCritical;
       els.cwAlert.className = 'alert-chip danger';
       els.cwAlert.textContent = dict.alertCritical;
     } else if (pct >= 75) {
-      els.cwBar.classList.add('danger');
       els.cwStatusBadge.classList.add('badge-red');
       els.cwStatusBadge.textContent = dict.statusHigh;
       els.cwAlert.className = 'alert-chip';
       els.cwAlert.textContent = dict.alertHigh;
     } else if (pct >= 50) {
-      els.cwBar.classList.add('warn');
       els.cwStatusBadge.classList.add('badge-amber');
       els.cwStatusBadge.textContent = dict.statusGrowing;
     } else {
       els.cwStatusBadge.classList.add('badge-green');
       els.cwStatusBadge.textContent = dict.statusHealthy;
+    }
+
+    const bdItems = [
+      { cls: 'msg', name: dict.bdMessages, val: bd.messages },
+      { cls: 'sys', name: dict.bdSystem, val: bd.system },
+      { cls: 'tool', name: dict.bdTools, val: bd.tools },
+      { cls: 'think', name: dict.bdThinking, val: bd.thinking },
+      { cls: 'free', name: dict.bdFree, val: remaining, isFree: true },
+    ];
+    els.cwBreakdownRows.innerHTML = bdItems
+      .map(
+        (it) => `
+      <div class="bd-row${it.isFree ? ' is-free' : ''}">
+        <span class="bd-dot ${it.cls}"></span>
+        <span class="bd-name">${escapeHtml(it.name)}</span>
+        <span class="bd-tok">${fmtCompact(it.val)}</span>
+        <span class="bd-pct">${pctOf(it.val).toFixed(1)}%</span>
+      </div>`
+      )
+      .join('');
+
+    const inv = state.lastData?.inventory;
+    if (inv) {
+      const blocks = [];
+      if (inv.mcpToolCount > 0) {
+        const chips = inv.mcpServers
+          .map((s) => `<span class="inv-chip">${escapeHtml(s.name)} (${s.count})</span>`)
+          .join('');
+        blocks.push(`
+          <details class="inv-details">
+            <summary><span>${escapeHtml(dict.invMcp)}</span><span class="inv-count">${inv.mcpToolCount}</span></summary>
+            <div class="inv-list">${chips}</div>
+          </details>`);
+      }
+      if (inv.skillsCount > 0) {
+        const chips = inv.skills.map((s) => `<span class="inv-chip">${escapeHtml(s)}</span>`).join('');
+        blocks.push(`
+          <details class="inv-details">
+            <summary><span>${escapeHtml(dict.invSkills)}</span><span class="inv-count">${inv.skillsCount}</span></summary>
+            <div class="inv-list">${chips}</div>
+          </details>`);
+      }
+      if (inv.memoriesCount > 0) {
+        const chips = inv.memories.map((m) => `<span class="inv-chip">${escapeHtml(m)}</span>`).join('');
+        blocks.push(`
+          <details class="inv-details">
+            <summary><span>${escapeHtml(dict.invMemory)}</span><span class="inv-count">${inv.memoriesCount}</span></summary>
+            <div class="inv-list">${chips}</div>
+          </details>`);
+      }
+      els.cwInventoryRows.innerHTML = blocks.join('');
+      els.cwInventoryRows.classList.toggle('hidden', blocks.length === 0);
+    } else {
+      els.cwInventoryRows.classList.add('hidden');
     }
 
     els.cwSummary.textContent = dict.summary(
@@ -601,6 +693,13 @@
     const isHidden = els.settingsPanel.classList.toggle('hidden');
     els.btnSettings.classList.toggle('active', !isHidden);
     els.btnSettings.setAttribute('aria-expanded', String(!isHidden));
+  });
+
+  els.btnBreakdown.addEventListener('click', () => {
+    state.showBreakdown = !state.showBreakdown;
+    els.cwBreakdownPanel.classList.toggle('hidden', !state.showBreakdown);
+    els.btnBreakdown.setAttribute('aria-expanded', String(state.showBreakdown));
+    els.btnBreakdown.textContent = state.showBreakdown ? t().bdToggleOpen : t().bdToggleClosed;
   });
 
   els.prefLang.addEventListener('change', () => {

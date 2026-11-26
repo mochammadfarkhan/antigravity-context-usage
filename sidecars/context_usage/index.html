@@ -102,13 +102,26 @@
         </div>
 
         <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-          <div id="cw-bar" class="progress-fill"></div>
+          <div id="cw-bar-stack" class="progress-stack">
+            <div id="seg-msg" class="seg seg-msg"></div>
+            <div id="seg-sys" class="seg seg-sys"></div>
+            <div id="seg-tool" class="seg seg-tool"></div>
+            <div id="seg-think" class="seg seg-think"></div>
+          </div>
           <span class="threshold-mark" style="left: 50%"></span>
           <span class="threshold-mark warn-mark" style="left: 80%"></span>
         </div>
 
-        <div id="cw-summary" class="summary-line">-</div>
+        <div class="summary-row">
+          <div id="cw-summary" class="summary-line">-</div>
+          <button id="btn-breakdown" class="btn-link" type="button" aria-expanded="false">▸ Breakdown</button>
+        </div>
         <div id="cw-alert" class="alert-chip hidden"></div>
+
+        <div id="cw-breakdown-panel" class="breakdown-panel hidden">
+          <div id="cw-breakdown-rows" class="bd-rows"></div>
+          <div id="cw-inventory-rows" class="inv-rows"></div>
+        </div>
 
         <div class="sparkline-box">
           <div class="spark-top">

@@ -173,6 +173,14 @@ function parseTranscript(sessionId, filePath, stat) {
   let totalCostUsd = 0;
   let totalSavedUsd = 0;
 
+  // Track content weight since the last CHECKPOINT (compaction) for context breakdown
+  let firstUserChars = 0;
+  let segMsgChars = 0;
+  let segToolChars = 0;
+  let segThinkChars = 0;
+  let segMediaCount = 0;
+  let firstTurnContextAfterReset = 0;
+
   const lines = raw.split('\n');
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -189,8 +197,33 @@ function parseTranscript(sessionId, filePath, stat) {
       latestTs = ts;
     }
 
-    if (!title && obj.type === 'USER_INPUT' && obj.content) {
-      title = extractTitle(obj.content);
+    if (obj.type === 'CHECKPOINT') {
+      segMsgChars = typeof obj.content === 'string' ? obj.content.length : 0;
+      segToolChars = 0;
+      segThinkChars = 0;
+      segMediaCount = 0;
+      firstTurnContextAfterReset = 0;
+    }
+
+    if (obj.type === 'USER_INPUT') {
+      const cLen = typeof obj.content === 'string' ? obj.content.length : 0;
+      if (!title && obj.content) {
+        title = extractTitle(obj.content);
+        firstUserChars = cLen;
+      }
+      segMsgChars += cLen;
+      if (Array.isArray(obj.media)) segMediaCount += obj.media.length;
+    } else if (obj.type === 'SYSTEM_MESSAGE') {
+      segMsgChars += typeof obj.content === 'string' ? obj.content.length : 0;
+    } else if (obj.type === 'GENERIC') {
+      segToolChars += typeof obj.content === 'string' ? obj.content.length : 0;
+    } else if (obj.type === 'PLANNER_RESPONSE') {
+      if (typeof obj.content === 'string') segMsgChars += obj.content.length;
+      if (typeof obj.response === 'string') segMsgChars += obj.response.length;
+      if (typeof obj.thinking === 'string') segThinkChars += obj.thinking.length;
+      if (Array.isArray(obj.tool_calls)) {
+        segToolChars += JSON.stringify(obj.tool_calls).length;
+      }
     }
 
     const hasTokens =
@@ -205,6 +238,10 @@ function parseTranscript(sessionId, filePath, stat) {
       const contextTokens = inputTokens + cacheReadTokens;
       const model = typeof obj.model === 'string' && obj.model ? obj.model : 'unknown';
       const { costUsd, savedUsd } = estimateTurnCost(model, inputTokens, cacheReadTokens, outputTokens);
+
+      if (firstTurnContextAfterReset === 0 && contextTokens > 0) {
+        firstTurnContextAfterReset = contextTokens;
+      }
 
       totalIn += inputTokens;
       totalCache += cacheReadTokens;
@@ -252,6 +289,42 @@ function parseTranscript(sessionId, filePath, stat) {
     }
   }
 
+  // Calibrate context breakdown to lastTurn.contextTokens
+  let breakdown = null;
+  if (lastTurn && lastTurn.contextTokens > 0) {
+    const totalCtx = lastTurn.contextTokens;
+    const firstUserEst = Math.round(firstUserChars / 4);
+    const rawSystem =
+      firstTurnContextAfterReset > firstUserEst
+        ? firstTurnContextAfterReset - firstUserEst
+        : Math.min(totalCtx, 12000);
+    const systemTokens = Math.min(totalCtx, Math.max(0, rawSystem));
+    const dynamicBudget = Math.max(0, totalCtx - systemTokens);
+
+    const estMsg = Math.round(segMsgChars / 4) + segMediaCount * 1200;
+    const estTool = Math.round(segToolChars / 4);
+    const estThink = Math.round(segThinkChars / 4);
+    const estSum = estMsg + estTool + estThink;
+
+    let messagesTokens = 0;
+    let toolsTokens = 0;
+    let thinkingTokens = 0;
+    if (estSum > 0 && dynamicBudget > 0) {
+      messagesTokens = Math.round((estMsg / estSum) * dynamicBudget);
+      toolsTokens = Math.round((estTool / estSum) * dynamicBudget);
+      thinkingTokens = Math.max(0, dynamicBudget - messagesTokens - toolsTokens);
+    } else {
+      messagesTokens = dynamicBudget;
+    }
+
+    breakdown = {
+      system: systemTokens,
+      messages: messagesTokens,
+      tools: toolsTokens,
+      thinking: thinkingTokens,
+    };
+  }
+
   const session = {
     id: sessionId,
     title: title || `Session ${sessionId.slice(0, 8)}`,
@@ -260,6 +333,7 @@ function parseTranscript(sessionId, filePath, stat) {
     contextTurnsCount: contextTurns.length,
     avgGrowthPerTurn,
     lastTurn,
+    breakdown,
     cumulative: {
       newIn: totalIn,
       cacheRead: totalCache,
@@ -311,6 +385,74 @@ function loadAllSessions() {
 
   sessions.sort((a, b) => b.updatedAt - a.updatedAt);
   return { sessions, totalLocalSessions: totalDirs };
+}
+
+let cachedEnvInventory = { ts: 0, data: null };
+function loadEnvInventory() {
+  const now = Date.now();
+  if (cachedEnvInventory.data && now - cachedEnvInventory.ts < 30000) {
+    return cachedEnvInventory.data;
+  }
+
+  const appDataDirs = findAppDataDirs();
+  const primaryAppData = appDataDirs[0] || join(homedir(), '.gemini', 'antigravity');
+  const configDir = join(homedir(), '.gemini', 'config');
+
+  // MCP servers & tools
+  const mcpDir = join(primaryAppData, 'mcp');
+  const mcpServers = [];
+  let mcpToolCount = 0;
+  for (const name of safeReaddir(mcpDir)) {
+    const dir = join(mcpDir, name);
+    try {
+      if (!statSync(dir).isDirectory()) continue;
+      const tools = safeReaddir(dir)
+        .filter((f) => f.endsWith('.json'))
+        .map((f) => f.replace(/\.json$/, ''));
+      if (tools.length > 0) {
+        mcpServers.push({ name, count: tools.length });
+        mcpToolCount += tools.length;
+      }
+    } catch {
+      continue;
+    }
+  }
+  mcpServers.sort((a, b) => b.count - a.count);
+
+  // Global skills
+  const skillsDir = join(configDir, 'skills');
+  const skills = safeReaddir(skillsDir)
+    .filter((name) => {
+      try {
+        return statSync(join(skillsDir, name)).isDirectory();
+      } catch {
+        return false;
+      }
+    })
+    .sort();
+
+  // Knowledge / Memory items
+  const knowledgeDir = join(primaryAppData, 'knowledge');
+  const memories = safeReaddir(knowledgeDir)
+    .filter((name) => {
+      try {
+        return statSync(join(knowledgeDir, name)).isDirectory();
+      } catch {
+        return false;
+      }
+    })
+    .sort();
+
+  const data = {
+    mcpToolCount,
+    mcpServers,
+    skillsCount: skills.length,
+    skills,
+    memoriesCount: memories.length,
+    memories,
+  };
+  cachedEnvInventory = { ts: now, data };
+  return data;
 }
 
 function downsampleSparkline(turns, maxPoints = 80) {
@@ -378,6 +520,7 @@ function buildUsageSnapshot({ sessionParam = 'auto', range = 'today', conversati
       model: lt.model,
       turnsCount: selected.turns.length,
       updatedAt: selected.updatedAt,
+      breakdown: selected.breakdown,
       sparkline: downsampleSparkline(contextTurns.length ? contextTurns : selected.turns, 80),
       lastTurn: {
         inputTokens: lt.inputTokens,
@@ -507,6 +650,7 @@ function buildUsageSnapshot({ sessionParam = 'auto', range = 'today', conversati
     },
     sessions: sessionOptions,
     totalLocalSessions,
+    inventory: loadEnvInventory(),
   };
 }
 
