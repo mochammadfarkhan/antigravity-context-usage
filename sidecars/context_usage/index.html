@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Context &amp; Usage</title>
+  <script src="/preload.js"></script>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span id="live-dot" class="live-dot" aria-hidden="true"></span>
+        <span class="brand-title">Context &amp; Usage</span>
+      </div>
+      <div class="topbar-actions">
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button type="button" class="lang-btn" data-lang="en">EN</button>
+          <button type="button" class="lang-btn" data-lang="id">ID</button>
+        </div>
+        <button id="btn-settings" class="btn-icon" type="button" title="Defaults" aria-expanded="false">⚙</button>
+        <button id="btn-pause" class="btn-icon" type="button" title="Pause auto-refresh">⏸</button>
+        <button id="btn-refresh" class="btn-icon" type="button" title="Refresh now">↻</button>
+      </div>
+    </header>
+
+    <!-- Collapsible Defaults Panel -->
+    <section id="settings-panel" class="settings-panel hidden" aria-label="Default Preferences">
+      <div class="settings-head">
+        <span id="lbl-settings-title" class="settings-title">Defaults</span>
+        <span id="lbl-settings-saved" class="saved-pill hidden">Saved</span>
+      </div>
+      <div class="settings-grid">
+        <label class="setting-row">
+          <span id="lbl-pref-lang">Language</span>
+          <select id="pref-lang" class="setting-select">
+            <option value="en">English (EN)</option>
+            <option value="id">Indonesia (ID)</option>
+          </select>
+        </label>
+        <label class="setting-row">
+          <span id="lbl-pref-currency">Currency</span>
+          <select id="pref-currency" class="setting-select">
+            <option value="auto">Auto</option>
+            <option value="usd">USD ($)</option>
+            <option value="idr">IDR (Rp)</option>
+          </select>
+        </label>
+        <label class="setting-row">
+          <span id="lbl-pref-limit">Context limit</span>
+          <select id="pref-limit" class="setting-select">
+            <option value="auto">Auto</option>
+            <option value="200000">200K</option>
+            <option value="1000000">1M</option>
+          </select>
+        </label>
+        <label class="setting-row">
+          <span id="lbl-pref-range">Timeframe</span>
+          <select id="pref-range" class="setting-select">
+            <option value="today">Today</option>
+            <option value="7d">7D</option>
+            <option value="30d">30D</option>
+            <option value="all">All</option>
+          </select>
+        </label>
+        <label class="setting-row">
+          <span id="lbl-pref-refresh">Refresh</span>
+          <select id="pref-refresh" class="setting-select">
+            <option value="3000">3s</option>
+            <option value="5000">5s</option>
+            <option value="10000">10s</option>
+            <option value="0">Manual</option>
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <select id="session-select" class="session-select" aria-label="Select session">
+      <option value="auto">Auto · Active Session</option>
+    </select>
+
+    <!-- Card 1: CONTEXT -->
+    <section class="card" aria-labelledby="cw-heading">
+      <div class="card-head">
+        <h2 id="cw-heading" class="card-title">CONTEXT</h2>
+        <div class="seg-group" role="group" aria-label="Context limit">
+          <button type="button" class="seg-btn" data-limit="200000">200K</button>
+          <button type="button" class="seg-btn active" data-limit="1000000">1M</button>
+        </div>
+      </div>
+
+      <div id="cw-empty" class="empty-state hidden">No turns yet.</div>
+
+      <div id="cw-body" class="card-stack">
+        <div class="hero-row">
+          <div class="hero-left">
+            <span id="cw-pct" class="hero-pct">0.0%</span>
+            <span id="cw-status-badge" class="badge badge-green">Healthy</span>
+          </div>
+          <span id="cw-tokens-pair" class="mono-muted">0 / 1M</span>
+        </div>
+
+        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="cw-bar" class="progress-fill"></div>
+          <span class="threshold-mark" style="left: 50%"></span>
+          <span class="threshold-mark warn-mark" style="left: 80%"></span>
+        </div>
+
+        <div id="cw-summary" class="summary-line">-</div>
+        <div id="cw-alert" class="alert-chip hidden"></div>
+
+        <div class="sparkline-box">
+          <div class="spark-top">
+            <span id="cw-model-line" class="mono-xs">-</span>
+            <span id="spark-tooltip" class="mono-xs muted"></span>
+          </div>
+          <svg id="cw-sparkline" class="sparkline-svg" viewBox="0 0 320 44" preserveAspectRatio="none" aria-label="Context growth"></svg>
+        </div>
+
+        <div id="cw-foot" class="foot-line">-</div>
+      </div>
+    </section>
+
+    <!-- Card 2: USAGE -->
+    <section class="card" aria-labelledby="lu-heading">
+      <div class="card-head">
+        <h2 id="lu-heading" class="card-title">USAGE</h2>
+        <div class="seg-group" role="tablist" aria-label="Timeframe">
+          <button type="button" class="seg-btn active" data-range="today">Today</button>
+          <button type="button" class="seg-btn" data-range="7d">7D</button>
+          <button type="button" class="seg-btn" data-range="30d">30D</button>
+          <button type="button" class="seg-btn" data-range="all">All</button>
+        </div>
+      </div>
+
+      <div class="digest-row">
+        <span id="lu-pace-badge" class="badge badge-green">Light</span>
+        <span id="lu-cost-pill" class="cost-pill" title="Estimated API equivalent">~$0.00</span>
+        <span id="lu-digest" class="digest-text">-</span>
+      </div>
+
+      <div class="kpi-3">
+        <div class="kpi">
+          <div id="lbl-kpi-fresh" class="kpi-label">FRESH IN</div>
+          <div id="lu-new-in" class="kpi-val">0</div>
+          <div id="lu-new-in-sub" class="kpi-sub">-</div>
+        </div>
+        <div class="kpi">
+          <div id="lbl-kpi-out" class="kpi-label">OUTPUT</div>
+          <div id="lu-output" class="kpi-val">0</div>
+          <div id="lu-output-sub" class="kpi-sub">-</div>
+        </div>
+        <div class="kpi">
+          <div id="lbl-kpi-cache" class="kpi-label">CACHED</div>
+          <div id="lu-cache" class="kpi-val">0%</div>
+          <div id="lu-cache-sub" class="kpi-sub">-</div>
+        </div>
+      </div>
+
+      <table class="model-table">
+        <thead>
+          <tr>
+            <th id="th-model">MODEL</th>
+            <th id="th-calls" class="num">TURNS</th>
+            <th id="th-tokens" class="num">IN / OUT</th>
+            <th id="th-cost" class="num">EST.</th>
+          </tr>
+        </thead>
+        <tbody id="lu-models-body">
+          <tr><td colspan="4" class="table-empty">-</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer id="footer-meta" class="footer-meta">0 sessions · 0 token overhead</footer>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

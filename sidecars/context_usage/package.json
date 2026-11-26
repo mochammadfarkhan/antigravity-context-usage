@@ -1,0 +1,6 @@
+{
+  "name": "context_usage",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Context & Usage sidecar UI plugin for Antigravity"
+}
