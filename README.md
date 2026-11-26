@@ -26,20 +26,21 @@ Save your preferred **Language**, **Currency** (`Auto` / `USD` / `IDR`), **Conte
 
 ## Installation
 
-### Option 1: Antigravity CLI (Recommended)
-```bash
-agy plugin install https://github.com/mochammadfarkhan/antigravity-context-usage
+### Option 1: Git Clone (Recommended — Easy Updates)
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/mochammadfarkhan/antigravity-context-usage.git "$env:USERPROFILE\.gemini\config\plugins\context-usage"
 ```
 
-### Option 2: Git Clone
 **macOS / Linux:**
 ```bash
 git clone https://github.com/mochammadfarkhan/antigravity-context-usage.git ~/.gemini/config/plugins/context-usage
 ```
 
-**Windows (PowerShell):**
-```powershell
-git clone https://github.com/mochammadfarkhan/antigravity-context-usage.git "$env:USERPROFILE\.gemini\config\plugins\context-usage"
+### Option 2: Antigravity CLI (`agy`) from Local Folder
+```bash
+git clone https://github.com/mochammadfarkhan/antigravity-context-usage.git
+agy plugin install ./antigravity-context-usage
 ```
 
 ### Option 3: Manual ZIP
