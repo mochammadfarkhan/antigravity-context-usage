@@ -10,6 +10,11 @@
       prefRefresh: 'Refresh',
       optAuto: 'Auto',
       optManual: 'Manual',
+      btnUpdate: 'Update Plugin',
+      updating: 'Updating...',
+      upToDate: 'Up to date',
+      updatedReload: (v) => `Updated to v${v} · reloading...`,
+      noGitUpdate: 'Install via git clone to enable 1-click update',
       autoSession: 'Auto · Active Session',
       contextTitle: 'CONTEXT',
       cwEmpty: 'No turns recorded in this session yet.',
@@ -75,6 +80,11 @@
       prefRefresh: 'Refresh',
       optAuto: 'Otomatis',
       optManual: 'Manual',
+      btnUpdate: 'Update Plugin',
+      updating: 'Mengupdate...',
+      upToDate: 'Sudah terbaru',
+      updatedReload: (v) => `Update ke v${v} · memuat ulang...`,
+      noGitUpdate: 'Install via git clone untuk update 1-klik',
       autoSession: 'Otomatis · Sesi Aktif',
       contextTitle: 'CONTEXT',
       cwEmpty: 'Belum ada turn di sesi ini.',
@@ -167,6 +177,9 @@
     prefLimit: $('pref-limit'),
     prefRange: $('pref-range'),
     prefRefresh: $('pref-refresh'),
+    lblVersion: $('lbl-version'),
+    lblUpdateStatus: $('lbl-update-status'),
+    btnUpdate: $('btn-update'),
     sessionSelect: $('session-select'),
     cwHeading: $('cw-heading'),
     cwEmpty: $('cw-empty'),
@@ -295,6 +308,7 @@
     els.prefRange.options[1].textContent = dict.range7d;
     els.prefRange.options[2].textContent = dict.range30d;
     els.prefRange.options[3].textContent = dict.rangeAll;
+    els.btnUpdate.textContent = dict.btnUpdate;
 
     els.cwHeading.textContent = dict.contextTitle;
     els.cwEmpty.textContent = dict.cwEmpty;
@@ -359,6 +373,7 @@
     els.prefLimit.value = state.limitMode;
     els.prefRange.value = prefs.defaultRange || state.range;
     els.prefRefresh.value = String(state.refreshMs);
+    if (prefs.version) els.lblVersion.textContent = `v${prefs.version}`;
     applyStaticStrings();
     setLimitButtons();
     startPolling();
@@ -733,6 +748,39 @@
     state.refreshMs = Number(els.prefRefresh.value);
     persistPrefs({ refreshMs: state.refreshMs });
     startPolling();
+  });
+
+  els.btnUpdate.addEventListener('click', async () => {
+    const dict = t();
+    els.btnUpdate.disabled = true;
+    els.lblUpdateStatus.className = 'update-status';
+    els.lblUpdateStatus.textContent = dict.updating;
+    try {
+      const res = await fetcher()('/api/update', { method: 'POST', body: '{}' });
+      const data = await res.json();
+      if (data.version) els.lblVersion.textContent = `v${data.version}`;
+      if (data.status === 'updated') {
+        els.lblUpdateStatus.className = 'update-status ok';
+        els.lblUpdateStatus.textContent = dict.updatedReload(data.version || '');
+        setTimeout(() => window.location.reload(), 1800);
+        return;
+      }
+      if (data.status === 'up-to-date') {
+        els.lblUpdateStatus.className = 'update-status ok';
+        els.lblUpdateStatus.textContent = dict.upToDate;
+      } else if (data.status === 'no-git') {
+        els.lblUpdateStatus.className = 'update-status err';
+        els.lblUpdateStatus.textContent = dict.noGitUpdate;
+      } else {
+        els.lblUpdateStatus.className = 'update-status err';
+        els.lblUpdateStatus.textContent = data.message || 'Update failed';
+      }
+    } catch (err) {
+      els.lblUpdateStatus.className = 'update-status err';
+      els.lblUpdateStatus.textContent = err.message || 'Update failed';
+    } finally {
+      els.btnUpdate.disabled = false;
+    }
   });
 
   els.btnPause.addEventListener('click', () => {

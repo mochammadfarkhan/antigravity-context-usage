@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
@@ -5,7 +6,58 @@ import { fileURLToPath } from 'node:url';
 import { SidecarApp, Response } from 'sidecar_sdk';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const PLUGIN_ROOT = join(__dirname, '..', '..');
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+function readPluginVersion() {
+  try {
+    const manifest = JSON.parse(readFileSync(join(PLUGIN_ROOT, 'plugin.json'), 'utf-8'));
+    return typeof manifest.version === 'string' ? manifest.version : '1.0.0';
+  } catch {
+    return '1.0.0';
+  }
+}
+
+function runPluginUpdate() {
+  const beforeVersion = readPluginVersion();
+  const isGitRepo = existsSync(join(PLUGIN_ROOT, '.git'));
+  if (!isGitRepo) {
+    return {
+      ok: false,
+      status: 'no-git',
+      version: beforeVersion,
+      message: 'Not a git repository (reinstall via git clone to enable 1-click updates).',
+    };
+  }
+  try {
+    const out = execFileSync('git', ['pull', '--ff-only'], {
+      cwd: PLUGIN_ROOT,
+      encoding: 'utf-8',
+      timeout: 15000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+    const afterVersion = readPluginVersion();
+    const upToDate = /already up[- ]to[- ]date/i.test(out);
+    if (!upToDate) {
+      // Let HTTP response flush, then exit so Antigravity restarts sidecar with updated code
+      setTimeout(() => process.exit(0), 600);
+    }
+    return {
+      ok: true,
+      status: upToDate ? 'up-to-date' : 'updated',
+      version: afterVersion,
+      output: out,
+    };
+  } catch (err) {
+    const msg = (err.stderr || err.message || 'git pull failed').toString().trim();
+    return {
+      ok: false,
+      status: 'error',
+      version: beforeVersion,
+      message: msg.slice(0, 220),
+    };
+  }
+}
 
 const DEFAULT_PREFS = {
   lang: process.env.DEFAULT_LANG === 'id' ? 'id' : 'en',
@@ -701,8 +753,9 @@ app.page('/', serveStatic('index.html', 'text/html; charset=utf-8'));
 app.page('/styles.css', serveStatic('styles.css', 'text/css; charset=utf-8'));
 app.page('/app.js', serveStatic('app.js', 'application/javascript; charset=utf-8'));
 
-app.api('/api/prefs', () => loadPrefs(), 'GET');
-app.api('/api/prefs', (data) => savePrefs(data), 'POST');
+app.api('/api/prefs', () => ({ ...loadPrefs(), version: readPluginVersion(), canGitUpdate: existsSync(join(PLUGIN_ROOT, '.git')) }), 'GET');
+app.api('/api/prefs', (data) => ({ ...savePrefs(data), version: readPluginVersion(), canGitUpdate: existsSync(join(PLUGIN_ROOT, '.git')) }), 'POST');
+app.api('/api/update', () => runPluginUpdate(), 'POST');
 
 app.api(
   '/api/usage',

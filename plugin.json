@@ -1,7 +1,7 @@
 {
   "name": "context-usage",
   "displayName": "Context & Usage",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Bilingual (EN/ID) live Context Health monitor, local token usage analytics, and API cost estimator for Antigravity with zero token overhead.",
   "logo": "assets/logo.svg",
   "author": {

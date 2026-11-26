@@ -52,7 +52,8 @@ agy plugin install ./antigravity-context-usage
 Once installed, open the Antigravity side pane (`+` button) and select **Context & Usage**.
 
 ## Updating
-If installed via `git clone`:
+- **1-click inside Antigravity:** Click **`⚙`** in the Context & Usage panel → **`Update Plugin`** (runs `git pull --ff-only` and auto-reloads when installed via `git clone`).
+- **Or via terminal:**
 ```bash
 git -C ~/.gemini/config/plugins/context-usage pull
 ```
